@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+dist/
+build/
+data/raw/*.parquet
+data/raw/*.csv
+.streamlit/secrets.toml
+.DS_Store
+Thumbs.db
+*.log
