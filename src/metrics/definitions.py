@@ -33,7 +33,7 @@ def _top_products_by_revenue(df: pd.DataFrame, *, n: int = 10, **_: Any) -> str:
         .sum()
         .nlargest(n, "revenue")
     )
-    lines = [f"  {i+1}. {r['product']}: ${r['revenue']:,.2f}" for i, r in top.iterrows()]
+    lines = [f"  {rank}. {r['product']}: ${r['revenue']:,.2f}" for rank, (_, r) in enumerate(top.iterrows(), 1)]
     return "\n".join(lines)
 
 
@@ -53,7 +53,7 @@ def _top_products_by_quantity(df: pd.DataFrame, *, n: int = 5, **_: Any) -> str:
         .sum()
         .nlargest(n, "quantity")
     )
-    lines = [f"  {i+1}. {r['product']}: {r['quantity']:,} units" for i, r in top.iterrows()]
+    lines = [f"  {rank}. {r['product']}: {r['quantity']:,} units" for rank, (_, r) in enumerate(top.iterrows(), 1)]
     return "\n".join(lines)
 
 

@@ -5,7 +5,7 @@ import streamlit as st
 from src.chat.context import build_context
 from src.chat.ui import init_chat_state, render_chat_history, render_suggested_questions
 from src.data.load import get_sales_data
-from src.llm.openai_client import complete
+from src.llm import complete
 
 st.set_page_config(page_title="AI Chat", page_icon="💬", layout="wide")
 st.title("AI Chat")

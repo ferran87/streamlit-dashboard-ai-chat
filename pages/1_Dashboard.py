@@ -1,5 +1,6 @@
 """Dashboard page: interactive data visualizations."""
 
+import pandas as pd
 import streamlit as st
 
 from src.data.load import get_sales_data
@@ -40,8 +41,6 @@ products = st.sidebar.multiselect(
 )
 
 # --- Apply filters ---
-import pandas as pd
-
 mask = (
     (df["order_date"].dt.date >= date_range[0])
     & (df["order_date"].dt.date <= date_range[-1])

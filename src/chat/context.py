@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import pandas as pd
+import streamlit as st
 
 from src.data.schema import schema_as_text
 from src.metrics.compute import compute_all_metrics
 
 
+@st.cache_data(show_spinner=False)
 def build_context(df: pd.DataFrame, extra_metrics: dict | None = None) -> str:
     """Return a context string with schema, summary stats, pre-computed metrics, and a sample."""
     parts: list[str] = []

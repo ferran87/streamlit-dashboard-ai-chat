@@ -1,11 +1,15 @@
 """Load and cache the sales dataset."""
 
+import os
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
-DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
+_env_data_path = os.getenv("DATA_PATH")
+DEFAULT_DATA_DIR = (
+    Path(_env_data_path) if _env_data_path else Path(__file__).resolve().parents[2] / "data" / "raw"
+)
 
 
 @st.cache_data(show_spinner="Loading data...")

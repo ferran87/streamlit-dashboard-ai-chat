@@ -8,6 +8,7 @@ Output: data/raw/sales.parquet
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from faker import Faker
 
@@ -29,32 +30,32 @@ CHANNELS = ["Online", "Retail", "Partner"]
 
 
 def generate() -> pd.DataFrame:
+    rng = np.random.default_rng(SEED)
     fake = Faker()
     Faker.seed(SEED)
-    rng = pd.np if hasattr(pd, "np") else __import__("numpy")
-    rng.random.seed(SEED)
 
     dates = pd.date_range("2024-01-01", "2025-12-31", freq="D")
+    n = NUM_ROWS
 
-    rows = []
-    for _ in range(NUM_ROWS):
-        product = rng.random.choice(PRODUCTS)
-        quantity = int(rng.random.randint(1, 50))
-        unit_price = round(rng.random.uniform(5.0, 500.0), 2)
-        rows.append(
-            {
-                "order_date": rng.random.choice(dates),
-                "region": rng.random.choice(REGIONS),
-                "product": product,
-                "channel": rng.random.choice(CHANNELS),
-                "quantity": quantity,
-                "unit_price": unit_price,
-                "revenue": round(quantity * unit_price, 2),
-                "customer_name": fake.name(),
-            }
-        )
+    date_idx = rng.integers(0, len(dates), size=n)
+    region_idx = rng.integers(0, len(REGIONS), size=n)
+    product_idx = rng.integers(0, len(PRODUCTS), size=n)
+    channel_idx = rng.integers(0, len(CHANNELS), size=n)
+    quantities = rng.integers(1, 51, size=n)
+    unit_prices = np.round(rng.uniform(5.0, 500.0, size=n), 2)
 
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(
+        {
+            "order_date": dates[date_idx],
+            "region": np.array(REGIONS)[region_idx],
+            "product": np.array(PRODUCTS)[product_idx],
+            "channel": np.array(CHANNELS)[channel_idx],
+            "quantity": quantities,
+            "unit_price": unit_prices,
+            "revenue": np.round(quantities * unit_prices, 2),
+            "customer_name": [fake.name() for _ in range(n)],
+        }
+    )
     df["order_date"] = pd.to_datetime(df["order_date"])
     return df.sort_values("order_date").reset_index(drop=True)
 
