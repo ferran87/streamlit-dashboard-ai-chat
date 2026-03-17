@@ -7,5 +7,5 @@ altair>=5.0,<6
 openai>=1.10,<3
 anthropic>=0.20,<2
 python-dotenv>=1.0,<2
-faker>=22.0,<35
+faker>=22.0,<41
 tabulate>=0.9,<2
