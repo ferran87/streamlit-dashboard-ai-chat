@@ -63,12 +63,12 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.subheader("Activation Value by Plan")
     plan_df = metrics.get_activation_value_by_plan(df_act)
-    st.plotly_chart(charts.activation_value_by_plan_bar(plan_df), use_container_width=True)
+    st.plotly_chart(charts.activation_value_by_plan_bar(plan_df), width="stretch")
 
 with col_right:
     st.subheader("Meal Type Adoption")
     meal_df = metrics.get_meal_type_adoption(dfs["meal_selections"], df_act)
-    st.plotly_chart(charts.meal_type_adoption_bar(meal_df), use_container_width=True)
+    st.plotly_chart(charts.meal_type_adoption_bar(meal_df), width="stretch")
 
 st.divider()
 
@@ -77,7 +77,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 st.subheader("Discount Effectiveness")
 disc_df = metrics.get_discount_effectiveness(df_act, dfs["discounts"])
-st.plotly_chart(charts.discount_effectiveness_table(disc_df), use_container_width=True)
+st.plotly_chart(charts.discount_effectiveness_table(disc_df), width="stretch")
 
 st.divider()
 
@@ -89,11 +89,11 @@ col_left2, col_right2 = st.columns([3, 2])
 with col_left2:
     st.subheader(f"Activation Value Trend (by {granularity})")
     trend_df = metrics.get_activation_trend(df_act, granularity=granularity)
-    st.plotly_chart(charts.activation_trend_line(trend_df), use_container_width=True)
+    st.plotly_chart(charts.activation_trend_line(trend_df), width="stretch")
 
 with col_right2:
     st.subheader("Cuisine Breakdown")
     filtered_meals = dfs["meal_selections"][
         dfs["meal_selections"]["activation_id"].isin(df_act["activation_id"])
     ]
-    st.plotly_chart(charts.cuisine_pie(filtered_meals), use_container_width=True)
+    st.plotly_chart(charts.cuisine_pie(filtered_meals), width="stretch")

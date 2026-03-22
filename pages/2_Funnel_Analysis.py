@@ -59,7 +59,7 @@ funnel_df = metrics.get_funnel_ctr(
     dfs["funnel_steps"], channel=channel, device=device,
     date_range=dr, df_sessions=dfs["sessions"],
 )
-st.plotly_chart(charts.funnel_steps_bar(funnel_df), use_container_width=True)
+st.plotly_chart(charts.funnel_steps_bar(funnel_df), width="stretch")
 
 st.divider()
 
@@ -68,7 +68,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 st.subheader("Sessions Lost per Step")
 drop_df = metrics.get_funnel_drop_off(dfs["funnel_steps"])
-st.plotly_chart(charts.funnel_drop_off_waterfall(drop_df), use_container_width=True)
+st.plotly_chart(charts.funnel_drop_off_waterfall(drop_df), width="stretch")
 
 st.divider()
 
@@ -80,12 +80,12 @@ col_left, col_right = st.columns(2)
 with col_left:
     st.subheader("CVR by Channel")
     ch_df = metrics.get_conversion_by_channel(dfs["sessions"], dfs["activations"])
-    st.plotly_chart(charts.cvr_by_channel_bar(ch_df), use_container_width=True)
+    st.plotly_chart(charts.cvr_by_channel_bar(ch_df), width="stretch")
 
 with col_right:
     st.subheader("CVR by Device")
     dev_df = metrics.get_conversion_by_device(dfs["sessions"], dfs["activations"])
-    st.plotly_chart(charts.cvr_by_device_bar(dev_df), use_container_width=True)
+    st.plotly_chart(charts.cvr_by_device_bar(dev_df), width="stretch")
 
 st.divider()
 
@@ -95,5 +95,5 @@ st.divider()
 st.subheader("Time on Step × Device (seconds)")
 st.plotly_chart(
     charts.funnel_ctr_heatmap(dfs["funnel_steps"], dfs["sessions"]),
-    use_container_width=True,
+    width="stretch",
 )

@@ -18,6 +18,13 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 
+
+def _hex_alpha(hex_color: str, alpha: float) -> str:
+    """Convert a 6-char hex color + alpha (0–1) to an rgba() string."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 # Shared colour palette
 COLORS = {
     "primary":     "#6366f1",
@@ -182,7 +189,7 @@ def cvr_by_channel_bar(df_channel: pd.DataFrame) -> go.Figure:
     fig.add_trace(
         go.Bar(
             x=df_channel["channel"], y=df_channel["sessions"],
-            name="Sessions", marker_color=[c + "80" for c in bar_colors],
+            name="Sessions", marker_color=[_hex_alpha(c, 0.5) for c in bar_colors],
         ),
         secondary_y=False,
     )
@@ -405,13 +412,13 @@ def session_volume_trend(df_sessions_trend: pd.DataFrame) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=df["week"], y=df["activated_sessions"],
         name="Activated", stackgroup="one",
-        fillcolor=COLORS["green"] + "80",
+        fillcolor=_hex_alpha(COLORS["green"], 0.5),
         line=dict(color=COLORS["green"], width=1),
     ))
     fig.add_trace(go.Scatter(
         x=df["week"], y=df["non_activated"],
         name="Non-activated", stackgroup="one",
-        fillcolor=COLORS["primary"] + "40",
+        fillcolor=_hex_alpha(COLORS["primary"], 0.25),
         line=dict(color=COLORS["primary"], width=1),
     ))
     fig.update_layout(

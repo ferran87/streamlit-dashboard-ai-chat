@@ -15,7 +15,7 @@ st.set_page_config(
 pages = {
     "Analytics": [
         st.Page("pages/1_Overview.py", title="Overview", icon=":material/dashboard:"),
-        st.Page("pages/2_Funnel_Analysis.py", title="Funnel Analysis", icon=":material/funnel:"),
+        st.Page("pages/2_Funnel_Analysis.py", title="Funnel Analysis", icon=":material/filter_alt:"),
         st.Page("pages/3_Activation_Deep_Dive.py", title="Activation Deep Dive", icon=":material/bar_chart:"),
     ],
     "AI": [

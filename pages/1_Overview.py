@@ -42,12 +42,12 @@ col_left, col_right = st.columns([3, 2])
 with col_left:
     st.subheader("Funnel Step Drop-off")
     funnel_df = metrics.get_funnel_ctr(dfs["funnel_steps"])
-    st.plotly_chart(charts.funnel_steps_bar(funnel_df), use_container_width=True)
+    st.plotly_chart(charts.funnel_steps_bar(funnel_df), width="stretch")
 
 with col_right:
     st.subheader("Activations by Type")
     type_df = metrics.get_activation_value_by_type(dfs["activations"])
-    st.plotly_chart(charts.activation_type_pie(type_df), use_container_width=True)
+    st.plotly_chart(charts.activation_type_pie(type_df), width="stretch")
 
 st.divider()
 
@@ -56,4 +56,4 @@ st.divider()
 # ---------------------------------------------------------------------------
 st.subheader("Weekly Session & Activation Volume")
 session_trend = metrics.get_session_volume_trend(dfs["sessions"])
-st.plotly_chart(charts.session_volume_trend(session_trend), use_container_width=True)
+st.plotly_chart(charts.session_volume_trend(session_trend), width="stretch")
