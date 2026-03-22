@@ -146,10 +146,9 @@ for idx, msg in enumerate(st.session_state.messages):
             import plotly.graph_objects as go
             st.plotly_chart(go.Figure(json.loads(fig_json)), width="stretch")
         st.markdown(content)
-
-    if role == "assistant" and _is_limitation(content):
-        user_q = _get_preceding_user_question(idx)
-        _render_feature_request_button(user_q, content, key=f"feat_req_{idx}")
+        if role == "assistant" and _is_limitation(content):
+            user_q = _get_preceding_user_question(idx)
+            _render_feature_request_button(user_q, content, key=f"feat_req_{idx}")
 
 # Chat input handler
 if prompt := st.chat_input("Ask about CVR, funnel steps, discounts, meal typesâ€¦"):
@@ -177,14 +176,14 @@ if prompt := st.chat_input("Ask about CVR, funnel steps, discounts, meal typesâ€
 
         response_text = st.write_stream(result.stream_gen)
 
+        if _is_limitation(response_text):
+            _render_feature_request_button(prompt, response_text, key="feat_req_live")
+
     st.session_state.messages.append({
         "role": "assistant",
         "content": response_text,
         "chart_figures": [fig.to_json() for fig in result.charts],
     })
-
-    if _is_limitation(response_text):
-        _render_feature_request_button(prompt, response_text, key="feat_req_live")
 
 # Sidebar
 with st.sidebar:
