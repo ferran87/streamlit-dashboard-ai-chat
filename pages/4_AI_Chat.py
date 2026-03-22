@@ -1,11 +1,20 @@
 """AI Analytics Assistant — unified agent with streaming and inline charts."""
 
 import json
+import re
 import streamlit as st
 from data.loader import load_all
 from src.agents.unified import run_turn, dispatch_chart_tool
 
 _MAX_HISTORY = 20
+
+_LIMITATION_PATTERNS = re.compile(
+    r"(?i)(can'?t create|can'?t generate|can'?t produce|can'?t show|can'?t plot|"
+    r"can'?t build|not available|not possible|unfortunately|unable to|"
+    r"none of the available|no available (chart|tool)|doesn'?t (support|provide|have)|"
+    r"don'?t have .{0,30} tool|outside .{0,20} capabilities|not .{0,20} supported|"
+    r"no tool .{0,30} (for|to)|beyond .{0,20} current)"
+)
 
 st.title("🤖 AI Analytics Assistant")
 st.caption(
@@ -19,19 +28,48 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
+def _is_limitation(text: str) -> bool:
+    """Return True if the assistant message indicates a capability gap."""
+    return bool(_LIMITATION_PATTERNS.search(text))
+
+
+def _get_preceding_user_question(msg_index: int) -> str:
+    """Walk backwards from msg_index to find the user question that triggered it."""
+    for i in range(msg_index - 1, -1, -1):
+        m = st.session_state.messages[i]
+        if m.get("role") == "user":
+            c = m.get("content", "")
+            if isinstance(c, list):
+                c = " ".join(
+                    b.get("text", "") for b in c
+                    if isinstance(b, dict) and b.get("type") == "text"
+                ).strip()
+            return c
+    return ""
+
+
+def _build_feature_context(user_question: str, ai_response: str) -> str:
+    """Build a pre-populated feature request from the conversation context."""
+    ai_snippet = ai_response[:500] + ("..." if len(ai_response) > 500 else "")
+    return (
+        f"User asked: \"{user_question}\"\n\n"
+        f"AI response: \"{ai_snippet}\"\n\n"
+        f"Requested feature: Based on the above, the dashboard needs a new capability "
+        f"to answer this type of question."
+    )
+
+
 @st.dialog("Request a Feature", width="large")
 def _feature_request_dialog():
+    context = st.session_state.get("feature_request_context", "")
     st.caption(
-        "Describe what you were trying to find out. The AI will generate "
-        "a product spec and code suggestion for the development team."
+        "The description below was auto-populated from your conversation. "
+        "Edit it if needed, then click Generate."
     )
     description = st.text_area(
         "What feature would you like?",
-        placeholder=(
-            "e.g. I wanted to see how CVR changed week over week as a line chart, "
-            "but the chat couldn't show me a time-series breakdown."
-        ),
-        height=120,
+        value=context,
+        height=180,
     )
     if st.button("Generate", type="primary"):
         if description.strip():
@@ -48,6 +86,16 @@ def _feature_request_dialog():
             )
         else:
             st.warning("Please describe the feature first.")
+
+
+def _extract_text(content) -> str:
+    """Extract plain text from a message content field."""
+    if isinstance(content, list):
+        return " ".join(
+            b.get("text", "") for b in content
+            if isinstance(b, dict) and b.get("type") == "text"
+        ).strip()
+    return content or ""
 
 
 # Starter question buttons
@@ -67,16 +115,10 @@ if not st.session_state.messages:
             st.session_state.messages.append({"role": "user", "content": q})
             st.rerun()
 
-# Render message history — chart figures are stored as JSON to avoid recomputation
-for msg in st.session_state.messages:
+# Render message history
+for idx, msg in enumerate(st.session_state.messages):
     role = msg.get("role")
-    content = msg.get("content", "")
-
-    if isinstance(content, list):
-        content = " ".join(
-            b.get("text", "") for b in content
-            if isinstance(b, dict) and b.get("type") == "text"
-        ).strip()
+    content = _extract_text(msg.get("content", ""))
 
     if role not in ("user", "assistant") or not content.strip():
         continue
@@ -86,6 +128,12 @@ for msg in st.session_state.messages:
             import plotly.graph_objects as go
             st.plotly_chart(go.Figure(json.loads(fig_json)), width="stretch")
         st.markdown(content)
+
+    if role == "assistant" and _is_limitation(content):
+        user_q = _get_preceding_user_question(idx)
+        if st.button("Request this as a feature", key=f"feat_req_{idx}", type="tertiary"):
+            st.session_state.feature_request_context = _build_feature_context(user_q, content)
+            _feature_request_dialog()
 
 # Chat input handler
 if prompt := st.chat_input("Ask about CVR, funnel steps, discounts, meal types…"):
@@ -119,6 +167,12 @@ if prompt := st.chat_input("Ask about CVR, funnel steps, discounts, meal types�
         "chart_figures": [fig.to_json() for fig in result.charts],
     })
 
+    if _is_limitation(response_text):
+        user_q = prompt
+        if st.button("Request this as a feature", key="feat_req_live", type="tertiary"):
+            st.session_state.feature_request_context = _build_feature_context(user_q, response_text)
+            _feature_request_dialog()
+
 # Sidebar
 with st.sidebar:
     st.header("Session")
@@ -128,12 +182,6 @@ with st.sidebar:
 
     total = len(st.session_state.messages)
     st.caption(f"{total} messages total · last {_MAX_HISTORY} sent to AI")
-
-    st.divider()
-    st.subheader("Feature Request")
-    st.caption("Describe a question the chat couldn't answer.")
-    if st.button("Request a Feature", use_container_width=True):
-        _feature_request_dialog()
 
     st.divider()
     st.markdown("**How it works**")
