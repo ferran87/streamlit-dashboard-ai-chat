@@ -1,16 +1,4 @@
-"""
-pages/3_Activation_Deep_Dive.py
---------------------------------
-Activation & discount analysis with interactive filters.
-
-Sidebar filters: activation type, plan, discount presence
-Charts:
-  - Activation value by plan (bar)
-  - Meal type adoption (horizontal bar)
-  - Discount effectiveness table
-  - Activation value trend (line)
-  - Cuisine breakdown (pie)
-"""
+"""Activation & discount analysis with type, plan, and discount filters."""
 
 import streamlit as st
 from data.loader import load_all

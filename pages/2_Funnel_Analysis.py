@@ -1,16 +1,4 @@
-"""
-pages/2_Funnel_Analysis.py
---------------------------
-Funnel deep-dive with interactive filters.
-
-Sidebar filters: date range, channel, device
-Charts:
-  - Funnel step CTR bar (green=healthy, red=below benchmark)
-  - Drop-off waterfall
-  - CVR by channel (grouped bar + CVR line)
-  - CVR by device (bar)
-  - Time on step × device heatmap
-"""
+"""Funnel deep-dive with date, channel, and device filters."""
 
 import streamlit as st
 import pandas as pd

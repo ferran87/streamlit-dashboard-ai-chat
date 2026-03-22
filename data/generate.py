@@ -47,9 +47,6 @@ DEVICE_WEIGHTS = [0.55, 0.35, 0.10]
 COUNTRIES = ["DE", "US", "GB", "AU", "NL", "AT", "BE", "CH"]
 COUNTRY_WEIGHTS = [0.30, 0.25, 0.15, 0.10, 0.07, 0.05, 0.05, 0.03]
 
-UTM_SOURCES = ["google", "facebook", "instagram", "newsletter", "partner", None]
-UTM_CAMPAIGNS = ["brand", "non_brand", "retargeting", "welcome_back", None]
-
 LANDING_PAGES = ["homepage", "menu", "offer", "blog", "referral_landing"]
 LANDING_WEIGHTS = [0.40, 0.25, 0.20, 0.10, 0.05]
 

@@ -1,22 +1,13 @@
-"""
-src/charts.py
--------------
-Plotly figure builders — NO Streamlit imports.
-Each function accepts a pre-computed DataFrame (from src/metrics.py)
-and returns a plotly.graph_objects.Figure.
-
-Consistent dark theme: use layout updates matching .streamlit/config.toml
-  paper_bgcolor="#0f172a", plot_bgcolor="#1e293b", font_color="#f8fafc"
-Primary accent colour: #6366f1 (indigo)
-"""
+"""Plotly figure builders — accepts DataFrames from src/metrics.py, returns Figures."""
 
 from __future__ import annotations
 
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
+
+from src.metrics import _STEP_ORDER as STEP_ORDER
 
 
 def _hex_alpha(hex_color: str, alpha: float) -> str:
@@ -55,11 +46,21 @@ CHANNEL_COLORS = {
     "direct":         COLORS["muted"],
 }
 
-# Benchmark CTR thresholds per step (for colouring healthy/unhealthy)
+_H_LEGEND = dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+
 _CTR_BENCHMARKS = {
     "landing": 60, "menu_browse": 40, "plan_selection": 65,
     "delivery_settings": 75, "account_creation": 70, "payment": 78,
 }
+
+
+def _theme(fig: go.Figure, title: str, height: int = 400, legend: bool = False, **kw) -> go.Figure:
+    """Apply dark theme and optional horizontal legend to a figure."""
+    opts = {**DARK_LAYOUT, "title": title, "height": height, **kw}
+    if legend:
+        opts["legend"] = _H_LEGEND
+    fig.update_layout(**opts)
+    return fig
 
 
 def funnel_steps_bar(df_funnel: pd.DataFrame) -> go.Figure:
@@ -90,13 +91,9 @@ def funnel_steps_bar(df_funnel: pd.DataFrame) -> go.Figure:
         textposition="auto",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Funnel Steps — Sessions Reached",
-        xaxis_title="Sessions",
-        yaxis=dict(categoryorder="array", categoryarray=list(reversed(df["step"]))),
-        height=400,
-    )
+    _theme(fig, "Funnel Steps — Sessions Reached",
+           xaxis_title="Sessions",
+           yaxis=dict(categoryorder="array", categoryarray=list(reversed(df["step"]))))
     return fig
 
 
@@ -114,13 +111,7 @@ def funnel_drop_off_waterfall(df_drop: pd.DataFrame) -> go.Figure:
         totals=dict(marker_color=COLORS["primary"]),
         connector=dict(line=dict(color=COLORS["muted"], width=1)),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Sessions Lost per Funnel Step",
-        yaxis_title="Sessions dropped",
-        height=400,
-        showlegend=False,
-    )
+    _theme(fig, "Sessions Lost per Funnel Step", yaxis_title="Sessions dropped", showlegend=False)
     return fig
 
 
@@ -147,12 +138,7 @@ def activation_trend_line(df_trend: pd.DataFrame) -> go.Figure:
         secondary_y=True,
     )
 
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Activation Trend",
-        height=400,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    _theme(fig, "Activation Trend", legend=True)
     fig.update_yaxes(title_text="Activations", secondary_y=False, gridcolor=COLORS["surface"])
     fig.update_yaxes(title_text="Avg Value ($)", secondary_y=True, gridcolor=COLORS["surface"])
     fig.update_xaxes(gridcolor=COLORS["surface"])
@@ -170,13 +156,8 @@ def activation_type_pie(df_type: pd.DataFrame) -> go.Figure:
         textinfo="label+percent",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Activations by Type",
-        height=400,
-        showlegend=True,
-        legend=dict(font=dict(color=COLORS["text"])),
-    )
+    _theme(fig, "Activations by Type", showlegend=True,
+           legend=dict(font=dict(color=COLORS["text"])))
     return fig
 
 
@@ -213,13 +194,7 @@ def cvr_by_channel_bar(df_channel: pd.DataFrame) -> go.Figure:
         secondary_y=True,
     )
 
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Conversion by Channel",
-        barmode="group",
-        height=420,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    _theme(fig, "Conversion by Channel", height=420, legend=True, barmode="group")
     fig.update_yaxes(title_text="Count", secondary_y=False, gridcolor=COLORS["surface"])
     fig.update_yaxes(title_text="CVR %", secondary_y=True, gridcolor=COLORS["surface"])
     fig.update_xaxes(gridcolor=COLORS["surface"])
@@ -244,12 +219,7 @@ def cvr_by_device_bar(df_device: pd.DataFrame) -> go.Figure:
         textposition="auto",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Conversion Rate by Device",
-        xaxis_title="CVR %",
-        height=300,
-    )
+    _theme(fig, "Conversion Rate by Device", height=300, xaxis_title="CVR %")
     return fig
 
 
@@ -264,11 +234,7 @@ def funnel_ctr_heatmap(df_funnel: pd.DataFrame, df_sessions: pd.DataFrame) -> go
         columns="device",
         aggfunc="mean",
     )
-    step_order = [
-        "landing", "menu_browse", "plan_selection",
-        "delivery_settings", "account_creation", "payment", "confirmation",
-    ]
-    pivot = pivot.reindex(step_order)
+    pivot = pivot.reindex(STEP_ORDER)
 
     fig = go.Figure(go.Heatmap(
         z=pivot.values,
@@ -280,11 +246,7 @@ def funnel_ctr_heatmap(df_funnel: pd.DataFrame, df_sessions: pd.DataFrame) -> go
         textfont=dict(color=COLORS["text"]),
         colorbar=dict(title="Seconds"),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Avg Time on Step by Device (seconds)",
-        height=420,
-    )
+    _theme(fig, "Avg Time on Step by Device (seconds)", height=420)
     return fig
 
 
@@ -303,12 +265,7 @@ def activation_value_by_plan_bar(df_plan: pd.DataFrame) -> go.Figure:
         textposition="auto",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Total Activation Value by Plan",
-        xaxis_title="Total Revenue ($)",
-        height=380,
-    )
+    _theme(fig, "Total Activation Value by Plan", height=380, xaxis_title="Total Revenue ($)")
     return fig
 
 
@@ -324,12 +281,7 @@ def meal_type_adoption_bar(df_meal: pd.DataFrame) -> go.Figure:
         textposition="auto",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Meal Type Adoption (% of activations)",
-        xaxis_title="% of Activations",
-        height=350,
-    )
+    _theme(fig, "Meal Type Adoption (% of activations)", height=350, xaxis_title="% of Activations")
     return fig
 
 
@@ -371,11 +323,7 @@ def discount_effectiveness_table(df_discount: pd.DataFrame) -> go.Figure:
             height=30,
         ),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Discount Effectiveness",
-        height=max(350, 60 + len(df_discount) * 32),
-    )
+    _theme(fig, "Discount Effectiveness", height=max(350, 60 + len(df_discount) * 32))
     return fig
 
 
@@ -393,13 +341,8 @@ def cuisine_pie(df_meals: pd.DataFrame) -> go.Figure:
         textinfo="label+percent",
         textfont=dict(color=COLORS["text"]),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Cuisine Breakdown",
-        height=400,
-        showlegend=True,
-        legend=dict(font=dict(color=COLORS["text"])),
-    )
+    _theme(fig, "Cuisine Breakdown", showlegend=True,
+           legend=dict(font=dict(color=COLORS["text"])))
     return fig
 
 
@@ -421,13 +364,7 @@ def session_volume_trend(df_sessions_trend: pd.DataFrame) -> go.Figure:
         fillcolor=_hex_alpha(COLORS["primary"], 0.25),
         line=dict(color=COLORS["primary"], width=1),
     ))
-    fig.update_layout(
-        **DARK_LAYOUT,
-        title="Weekly Session Volume",
-        yaxis_title="Sessions",
-        height=400,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
+    _theme(fig, "Weekly Session Volume", legend=True, yaxis_title="Sessions")
     fig.update_xaxes(gridcolor=COLORS["surface"])
     fig.update_yaxes(gridcolor=COLORS["surface"])
     return fig

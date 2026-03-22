@@ -95,10 +95,7 @@ streamlit-dashboard-ai-chat/
 │   ├── charts.py               # Plotly dark-themed figure builders
 │   └── agents/
 │       ├── unified.py          # Unified agent — streaming + inline charts
-│       ├── orchestrator.py     # Original 3-agent orchestrator (legacy)
-│       ├── analytics.py        # Analytics Agent (legacy)
-│       ├── insights.py         # Insights Agent (legacy)
-│       ├── tools.py            # Tool schemas (analytics + insights + chart)
+│       ├── tools.py            # Tool schemas (data + validation + chart)
 │       └── context.py          # Live context builder + benchmark validation
 └── pages/
     ├── 1_Overview.py

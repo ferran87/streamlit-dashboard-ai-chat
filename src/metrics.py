@@ -1,13 +1,4 @@
-"""
-src/metrics.py
---------------
-Pure metric computation functions — NO Streamlit imports.
-Each function accepts DataFrames and returns a DataFrame or scalar.
-These are called by both src/charts.py and src/agents/tools.py.
-
-All functions that accept optional filter parameters should return
-unfiltered results when filters are None / "all".
-"""
+"""Pure metric functions — accepts DataFrames, returns DataFrames or scalars."""
 
 from __future__ import annotations
 
@@ -23,6 +14,17 @@ _STEP_ORDER = [
     "landing", "menu_browse", "plan_selection",
     "delivery_settings", "account_creation", "payment", "confirmation",
 ]
+
+
+def _step_session_counts(df_funnel: pd.DataFrame) -> pd.Series:
+    """Unique sessions per funnel step, ordered by _STEP_ORDER."""
+    return (
+        df_funnel.groupby("step_name")["session_id"]
+        .nunique()
+        .reindex(_STEP_ORDER)
+        .fillna(0)
+        .astype(int)
+    )
 
 
 def get_funnel_ctr(
@@ -51,13 +53,7 @@ def get_funnel_ctr(
             ]
         df = df[df["session_id"].isin(filt["session_id"])]
 
-    step_counts = (
-        df.groupby("step_name")["session_id"]
-        .nunique()
-        .reindex(_STEP_ORDER)
-        .fillna(0)
-        .astype(int)
-    )
+    step_counts = _step_session_counts(df)
 
     rows = []
     for i, step in enumerate(_STEP_ORDER):
@@ -132,18 +128,9 @@ def get_conversion_by_device(
     return merged.sort_values("cvr", ascending=False).reset_index(drop=True)
 
 
-def get_funnel_drop_off(
-    df_funnel: pd.DataFrame,
-    df_sessions: Optional[pd.DataFrame] = None,
-) -> pd.DataFrame:
+def get_funnel_drop_off(df_funnel: pd.DataFrame) -> pd.DataFrame:
     """Returns [step, step_order, dropped_sessions, drop_pct] per step."""
-    step_counts = (
-        df_funnel.groupby("step_name")["session_id"]
-        .nunique()
-        .reindex(_STEP_ORDER)
-        .fillna(0)
-        .astype(int)
-    )
+    step_counts = _step_session_counts(df_funnel)
 
     rows = []
     for i, step in enumerate(_STEP_ORDER):
@@ -281,9 +268,7 @@ def get_activation_trend(
     if granularity == "month":
         df["period"] = df["activation_date"].dt.to_period("M").astype(str)
     else:
-        df["period"] = df["activation_date"].dt.to_period("W").apply(
-            lambda p: str(p.start_time.date())
-        )
+        df["period"] = df["activation_date"].dt.to_period("W").dt.start_time.dt.strftime("%Y-%m-%d")
 
     grouped = (
         df.groupby("period")
@@ -309,9 +294,7 @@ def get_session_volume_trend(df_sessions: pd.DataFrame) -> pd.DataFrame:
     """Weekly sessions, activated sessions, and CVR."""
     df = df_sessions.copy()
     df["session_date"] = pd.to_datetime(df["session_date"])
-    df["week"] = df["session_date"].dt.to_period("W").apply(
-        lambda p: str(p.start_time.date())
-    )
+    df["week"] = df["session_date"].dt.to_period("W").dt.start_time.dt.strftime("%Y-%m-%d")
 
     grouped = (
         df.groupby("week")

@@ -1,13 +1,4 @@
-"""
-pages/1_Overview.py
--------------------
-Executive overview page.
-
-Layout:
-  Row 1: 4 KPI metric cards
-  Row 2: Funnel steps bar (left) | Activation type pie (right)
-  Row 3: Weekly session + activation trend (full width)
-"""
+"""Executive overview: KPIs, funnel bar, activation pie, session trend."""
 
 import streamlit as st
 from data.loader import load_all

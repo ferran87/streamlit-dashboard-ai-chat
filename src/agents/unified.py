@@ -165,7 +165,7 @@ def run_turn(
                     _log_tool_call(status_container, block.name, block.input)
 
                 if block.name == "generate_chart":
-                    fig = _dispatch_chart_tool(block.input, datasets)
+                    fig = dispatch_chart_tool(block.input, datasets)
                     if fig is not None:
                         collected_charts.append(fig)
                         chart_type_ids.append(block.input.get("chart_type", "chart"))
@@ -216,80 +216,42 @@ def run_turn(
 
 
 # ---------------------------------------------------------------------------
-# Chart tool dispatcher
+# Chart tool dispatcher — dict-based registry
 # ---------------------------------------------------------------------------
 
-def _dispatch_chart_tool(
-    tool_input: dict,
-    datasets: dict[str, pd.DataFrame],
-) -> go.Figure | None:
-    """
-    Calls the appropriate metrics function + chart builder.
-    Returns None on any error (graceful degradation — agent tells user data unavailable).
-    Never raises.
-    """
+def _chart_funnel_steps(ds, **kw):
+    return charts.funnel_steps_bar(m.get_funnel_ctr(
+        ds["funnel_steps"], channel=kw.get("channel"), device=kw.get("device"),
+        df_sessions=ds["sessions"]))
+
+def _chart_activation_type_pie(ds, **kw):
+    df = m.get_activation_value_by_type(ds["activations"])
+    return charts.activation_type_pie(df[["activation_type", "count"]].copy())
+
+_CHART_REGISTRY: dict[str, callable] = {
+    "funnel_steps_bar":           _chart_funnel_steps,
+    "funnel_drop_off_waterfall":  lambda ds, **kw: charts.funnel_drop_off_waterfall(m.get_funnel_drop_off(ds["funnel_steps"])),
+    "activation_trend_line":      lambda ds, **kw: charts.activation_trend_line(m.get_activation_trend(ds["activations"], granularity=kw.get("granularity", "week"))),
+    "activation_type_pie":        _chart_activation_type_pie,
+    "cvr_by_channel_bar":         lambda ds, **kw: charts.cvr_by_channel_bar(m.get_conversion_by_channel(ds["sessions"], ds["activations"])),
+    "cvr_by_device_bar":          lambda ds, **kw: charts.cvr_by_device_bar(m.get_conversion_by_device(ds["sessions"], ds["activations"])),
+    "activation_value_by_plan":   lambda ds, **kw: charts.activation_value_by_plan_bar(m.get_activation_value_by_plan(ds["activations"])),
+    "meal_type_adoption_bar":     lambda ds, **kw: charts.meal_type_adoption_bar(m.get_meal_type_adoption(ds["meal_selections"], ds["activations"])),
+    "discount_effectiveness":     lambda ds, **kw: charts.discount_effectiveness_table(m.get_discount_effectiveness(ds["activations"], ds["discounts"])),
+    "session_volume_trend":       lambda ds, **kw: charts.session_volume_trend(m.get_session_volume_trend(ds["sessions"])),
+}
+
+
+def dispatch_chart_tool(tool_input: dict, datasets: dict[str, pd.DataFrame]) -> go.Figure | None:
+    """Build a chart from tool_input. Returns None on any error (graceful degradation)."""
     chart_type = tool_input.get("chart_type", "")
-    channel    = tool_input.get("channel")
-    device     = tool_input.get("device")
-    granularity = tool_input.get("granularity", "week")
-
-    df_sessions    = datasets.get("sessions",        pd.DataFrame())
-    df_funnel      = datasets.get("funnel_steps",    pd.DataFrame())
-    df_activations = datasets.get("activations",     pd.DataFrame())
-    df_meals       = datasets.get("meal_selections", pd.DataFrame())
-    df_discounts   = datasets.get("discounts",       pd.DataFrame())
-
-    try:
-        if chart_type == "funnel_steps_bar":
-            df = m.get_funnel_ctr(df_funnel, channel=channel, device=device,
-                                  df_sessions=df_sessions)
-            return charts.funnel_steps_bar(df)
-
-        elif chart_type == "funnel_drop_off_waterfall":
-            df = m.get_funnel_drop_off(df_funnel)
-            return charts.funnel_drop_off_waterfall(df)
-
-        elif chart_type == "activation_trend_line":
-            df = m.get_activation_trend(df_activations, granularity=granularity)
-            return charts.activation_trend_line(df)
-
-        elif chart_type == "activation_type_pie":
-            df = m.get_activation_value_by_type(df_activations)
-            # activation_type_pie expects [activation_type, count] — slice to those cols
-            df_pie = df[["activation_type", "count"]].copy()
-            return charts.activation_type_pie(df_pie)
-
-        elif chart_type == "cvr_by_channel_bar":
-            df = m.get_conversion_by_channel(df_sessions, df_activations)
-            return charts.cvr_by_channel_bar(df)
-
-        elif chart_type == "cvr_by_device_bar":
-            df = m.get_conversion_by_device(df_sessions, df_activations)
-            return charts.cvr_by_device_bar(df)
-
-        elif chart_type == "activation_value_by_plan":
-            df = m.get_activation_value_by_plan(df_activations)
-            return charts.activation_value_by_plan_bar(df)
-
-        elif chart_type == "meal_type_adoption_bar":
-            df = m.get_meal_type_adoption(df_meals, df_activations)
-            return charts.meal_type_adoption_bar(df)
-
-        elif chart_type == "discount_effectiveness":
-            df = m.get_discount_effectiveness(df_activations, df_discounts)
-            return charts.discount_effectiveness_table(df)
-
-        elif chart_type == "session_volume_trend":
-            df = m.get_session_volume_trend(df_sessions)
-            return charts.session_volume_trend(df)
-
-    except NotImplementedError:
-        # Metric stub not yet implemented — silent degradation
+    builder = _CHART_REGISTRY.get(chart_type)
+    if builder is None:
         return None
+    try:
+        return builder(datasets, **tool_input)
     except Exception:
         return None
-
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -396,10 +358,7 @@ def _make_stream_generator(
     system_prompt: str,
     messages: list[dict],
 ) -> Generator[str, None, None]:
-    """
-    Generator that yields text chunks from a streaming API call.
-    No 'tools' parameter — forces the model to synthesise a final text response.
-    """
+    """Yield text chunks from a streaming API call (no tools)."""
     with client.messages.stream(
         model=MODEL,
         system=system_prompt,
@@ -412,11 +371,7 @@ def _make_stream_generator(
 
 
 def _fake_stream(text: str) -> Generator[str, None, None]:
-    """
-    Yields a pre-computed text string as a single chunk.
-    Used when the agent answered directly from context (no tool calls needed)
-    so the UI still uses st.write_stream() for a consistent experience.
-    """
+    """Yield pre-computed text as a single chunk for consistent st.write_stream() UX."""
     yield text
 
 
@@ -425,14 +380,7 @@ def _fake_stream(text: str) -> Generator[str, None, None]:
 # ---------------------------------------------------------------------------
 
 def _flatten_and_prune(messages: list[dict], max_history: int) -> list[dict]:
-    """
-    Convert session messages to API-compatible format:
-    - Strip chart_types field
-    - Flatten list-content to plain text
-    - Skip any non user/assistant messages
-    - Prune to last max_history messages
-    - Ensure the first message is a user turn
-    """
+    """Convert session messages to API format, prune to last max_history, start on user turn."""
     result = []
     for msg in messages:
         role = msg.get("role")
