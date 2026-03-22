@@ -271,6 +271,7 @@ _CHART_REGISTRY: dict[str, callable] = {
     "meal_type_adoption_bar":     lambda ds, **kw: charts.meal_type_adoption_bar(m.get_meal_type_adoption(ds["meal_selections"], ds["activations"])),
     "discount_effectiveness":     lambda ds, **kw: charts.discount_effectiveness_table(m.get_discount_effectiveness(ds["activations"], ds["discounts"])),
     "session_volume_trend":       lambda ds, **kw: charts.session_volume_trend(m.get_session_volume_trend(ds["sessions"])),
+    "cvr_trend_line":             lambda ds, **kw: charts.cvr_trend_line(m.get_session_volume_trend(ds["sessions"])),
 }
 
 

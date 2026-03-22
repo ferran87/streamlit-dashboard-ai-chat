@@ -281,7 +281,8 @@ GENERATE_CHART_TOOL: dict = {
         "- activation_value_by_plan: total revenue and avg basket by plan\n"
         "- meal_type_adoption_bar: % of activations that included each meal type\n"
         "- discount_effectiveness: table of discount codes with uplift vs no-discount baseline\n"
-        "- session_volume_trend: weekly activated vs non-activated session stacked area"
+        "- session_volume_trend: weekly activated vs non-activated session stacked area\n"
+        "- cvr_trend_line: weekly conversion rate (%) as a line chart over time"
     ),
     "input_schema": {
         "type": "object",
@@ -300,6 +301,7 @@ GENERATE_CHART_TOOL: dict = {
                     "meal_type_adoption_bar",
                     "discount_effectiveness",
                     "session_volume_trend",
+                    "cvr_trend_line",
                 ],
             },
             "channel": {

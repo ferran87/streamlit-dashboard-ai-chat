@@ -346,6 +346,28 @@ def cuisine_pie(df_meals: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def cvr_trend_line(df_sessions_trend: pd.DataFrame) -> go.Figure:
+    """Line chart of weekly CVR % with fill to zero."""
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_sessions_trend["week"],
+        y=df_sessions_trend["cvr"],
+        mode="lines+markers+text",
+        text=[f"{v:.1f}%" for v in df_sessions_trend["cvr"]],
+        textposition="top center",
+        textfont=dict(color=COLORS["text"], size=10),
+        line=dict(color=COLORS["green"], width=2),
+        marker=dict(size=6, color=COLORS["green"]),
+        fill="tozeroy",
+        fillcolor=_hex_alpha(COLORS["green"], 0.15),
+        name="CVR %",
+    ))
+    _theme(fig, "Weekly Conversion Rate (%)", yaxis_title="CVR %", legend=False)
+    fig.update_xaxes(gridcolor=COLORS["surface"])
+    fig.update_yaxes(gridcolor=COLORS["surface"])
+    return fig
+
+
 def session_volume_trend(df_sessions_trend: pd.DataFrame) -> go.Figure:
     """Stacked area: activated vs non-activated sessions per week."""
     df = df_sessions_trend.copy()
