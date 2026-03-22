@@ -9,11 +9,17 @@ from src.agents.unified import run_turn, dispatch_chart_tool
 _MAX_HISTORY = 20
 
 _LIMITATION_PATTERNS = re.compile(
-    r"(?i)(can'?t create|can'?t generate|can'?t produce|can'?t show|can'?t plot|"
-    r"can'?t build|not available|not possible|unfortunately|unable to|"
-    r"none of the available|no available (chart|tool)|doesn'?t (support|provide|have)|"
-    r"don'?t have .{0,30} tool|outside .{0,20} capabilities|not .{0,20} supported|"
-    r"no tool .{0,30} (for|to)|beyond .{0,20} current)"
+    r"(?i)("
+    r"I can'?t \w+|I cannot \w+|"
+    r"not (available|possible|supported|currently)|"
+    r"unfortunately|unable to|"
+    r"none of the available|no available (chart|tool)|"
+    r"doesn'?t (support|provide|have|include|offer)|"
+    r"don'?t (have|include|support|offer)|"
+    r"outside .{0,20} capabilities|beyond .{0,20} current|"
+    r"no tool .{0,30} (for|to)|"
+    r"available (chart|tool) types don'?t"
+    r")"
 )
 
 st.title("🤖 AI Analytics Assistant")
