@@ -197,6 +197,29 @@ ANALYTICS_TOOLS: list[dict] = [
             "required": [],
         },
     },
+    {
+        "name": "get_cvr_trend_by_device",
+        "description": (
+            "Returns conversion rate (CVR %) trend broken down by device type "
+            "(mobile, desktop, tablet) over time, grouped by week or month. "
+            "Each row: period, device, sessions, activations, cvr. "
+            "Use when the user asks for weekly/monthly CVR by device, device CVR trends, "
+            "or how device-level conversion changes over time."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "granularity": {
+                    "type": "string",
+                    "description": "Time grouping: 'week' or 'month'.",
+                    "enum": ["week", "month"],
+                    "default": "week",
+                },
+                **_DATE_PROPS,
+            },
+            "required": [],
+        },
+    },
 ]
 
 
@@ -282,7 +305,8 @@ GENERATE_CHART_TOOL: dict = {
         "- meal_type_adoption_bar: % of activations that included each meal type\n"
         "- discount_effectiveness: table of discount codes with uplift vs no-discount baseline\n"
         "- session_volume_trend: weekly activated vs non-activated session stacked area\n"
-        "- cvr_trend_line: weekly conversion rate (%) as a line chart over time"
+        "- cvr_trend_line: weekly conversion rate (%) as a line chart over time\n"
+        "- cvr_trend_by_device_line: weekly CVR trend with one line per device (mobile/desktop/tablet)"
     ),
     "input_schema": {
         "type": "object",
@@ -302,6 +326,7 @@ GENERATE_CHART_TOOL: dict = {
                     "discount_effectiveness",
                     "session_volume_trend",
                     "cvr_trend_line",
+                    "cvr_trend_by_device_line",
                 ],
             },
             "channel": {

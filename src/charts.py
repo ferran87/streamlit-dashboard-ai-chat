@@ -346,6 +346,36 @@ def cuisine_pie(df_meals: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def cvr_trend_by_device_line(df_device_trend: pd.DataFrame) -> go.Figure:
+    """Multi-line CVR trend, one line per device."""
+    device_colors = {
+        "desktop": COLORS["green"],
+        "mobile":  COLORS["primary"],
+        "tablet":  COLORS["orange"],
+    }
+    fig = go.Figure()
+    for device in sorted(df_device_trend["device"].unique()):
+        sub = df_device_trend[df_device_trend["device"] == device]
+        fig.add_trace(go.Scatter(
+            x=sub["period"], y=sub["cvr"],
+            mode="lines+markers",
+            name=device.capitalize(),
+            line=dict(color=device_colors.get(device, COLORS["muted"]), width=2),
+            marker=dict(size=6),
+            customdata=sub[["sessions", "activations"]].values,
+            hovertemplate=(
+                f"<b>{device.capitalize()}</b><br>"
+                "Period: %{x}<br>CVR: %{y:.2f}%<br>"
+                "Sessions: %{customdata[0]:,}<br>"
+                "Activations: %{customdata[1]:,}<extra></extra>"
+            ),
+        ))
+    _theme(fig, "Weekly CVR by Device", legend=True, yaxis_title="CVR %")
+    fig.update_xaxes(gridcolor=COLORS["surface"])
+    fig.update_yaxes(gridcolor=COLORS["surface"])
+    return fig
+
+
 def cvr_trend_line(df_sessions_trend: pd.DataFrame) -> go.Figure:
     """Line chart of weekly CVR % with fill to zero."""
     fig = go.Figure()

@@ -311,6 +311,31 @@ def get_session_volume_trend(df_sessions: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
+def get_cvr_trend_by_device(
+    df_sessions: pd.DataFrame,
+    granularity: str = "week",
+) -> pd.DataFrame:
+    """CVR over time broken down by device. Returns [period, device, sessions, activations, cvr]."""
+    df = df_sessions.copy()
+    df["session_date"] = pd.to_datetime(df["session_date"])
+
+    if granularity == "month":
+        df["period"] = df["session_date"].dt.to_period("M").astype(str)
+    else:
+        df["period"] = df["session_date"].dt.to_period("W").dt.start_time.dt.strftime("%Y-%m-%d")
+
+    grouped = (
+        df.groupby(["period", "device"])
+        .agg(sessions=("session_id", "count"), activations=("activated", "sum"))
+        .reset_index()
+        .sort_values(["period", "device"])
+        .reset_index(drop=True)
+    )
+    grouped["activations"] = grouped["activations"].astype(int)
+    grouped["cvr"] = (grouped["activations"] / grouped["sessions"] * 100).round(2)
+    return grouped
+
+
 def get_kpi_summary(
     df_sessions: pd.DataFrame,
     df_funnel: pd.DataFrame,

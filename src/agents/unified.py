@@ -272,6 +272,7 @@ _CHART_REGISTRY: dict[str, callable] = {
     "discount_effectiveness":     lambda ds, **kw: charts.discount_effectiveness_table(m.get_discount_effectiveness(ds["activations"], ds["discounts"])),
     "session_volume_trend":       lambda ds, **kw: charts.session_volume_trend(m.get_session_volume_trend(ds["sessions"])),
     "cvr_trend_line":             lambda ds, **kw: charts.cvr_trend_line(m.get_session_volume_trend(ds["sessions"])),
+    "cvr_trend_by_device_line":   lambda ds, **kw: charts.cvr_trend_by_device_line(m.get_cvr_trend_by_device(ds["sessions"], granularity=kw.get("granularity", "week"))),
 }
 
 
@@ -455,6 +456,12 @@ def _dispatch_analytics_tool(
 
         elif tool_name == "get_session_volume_trend":
             df = m.get_session_volume_trend(df_sessions)
+            result = df.to_dict(orient="records")
+
+        elif tool_name == "get_cvr_trend_by_device":
+            df = m.get_cvr_trend_by_device(
+                df_sessions, granularity=tool_input.get("granularity", "week")
+            )
             result = df.to_dict(orient="records")
 
         else:
