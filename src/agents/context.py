@@ -1,17 +1,4 @@
-"""
-src/agents/context.py
----------------------
-Builds the shared system-prompt context block injected into every agent API call.
-
-The context block contains:
-  - Live KPI snapshot (computed from DataFrames)
-  - Funnel step CTRs (last 30 days)
-  - Top activation plans
-  - Discount usage summary
-  - Anti-hallucination instruction
-
-The Insights Agent receives this PLUS hardcoded benchmark ranges.
-"""
+"""Shared system-prompt context block and benchmark validation for the unified agent."""
 
 from __future__ import annotations
 
@@ -85,17 +72,78 @@ BENCHMARKS: dict[str, dict] = {
 }
 
 
-def validate_metric(metric_name: str, value: float) -> dict:
+def format_benchmark_table() -> str:
+    """Format BENCHMARKS into a text table for the system prompt."""
+    header = "\n--- BENCHMARK REFERENCE (do not invent values outside these ranges) ---\n"
+    return header + "".join(
+        f"  {name}: healthy {b['healthy_min']}–{b['healthy_max']}%"
+        f" | poor <{b.get('poor_max', '?')}%"
+        f" | excellent >{b.get('excellent_min', '?')}%\n"
+        for name, b in BENCHMARKS.items()
+    )
+
+
+def _compute_confidence(n: int | None) -> tuple[str, str | None]:
     """
-    Used by the Insights Agent's validate_metric tool.
-    Returns status, benchmark_range, and interpretation.
+    Returns (confidence_tier, sample_caveat_or_None) based on sample size n.
+
+    Tiers:
+      very_low  n < 30    — too small for any conclusions
+      low       n 30–99   — treat as indicative only
+      moderate  n 100–499 — reasonably reliable, may shift
+      high      n ≥ 500 or n is None (top-level aggregate assumed large)
     """
+    if n is None:
+        return "high", None
+    if n < 30:
+        return "very_low", (
+            f"Only {n} observations — too small for reliable conclusions. "
+            "Do not make any directional claim."
+        )
+    if n < 100:
+        return "low", (
+            f"Based on {n} observations — treat as indicative only. "
+            "State sample size explicitly in your response."
+        )
+    if n < 500:
+        return "moderate", (
+            f"Based on {n} observations — reasonably reliable "
+            "but may shift with more data."
+        )
+    return "high", None
+
+
+def validate_metric(metric_name: str, value: float, n: int | None = None) -> dict:
+    """
+    Used by the unified agent's validate_metric tool.
+    Returns status, benchmark_range, interpretation, confidence, and optionally sample_caveat.
+
+    Args:
+        metric_name: Metric identifier. The 12 names in BENCHMARKS return a full
+                     health assessment. Any other name returns status='no_benchmark'
+                     with explicit agent-facing guidance on reporting without qualitative labels.
+        value:       The actual metric value (percentage).
+        n:           Optional sample size (sessions or activations driving this value).
+                     When provided, returns a confidence tier and, for small samples,
+                     a sample_caveat string the agent must include in its response.
+    """
+    confidence, sample_caveat = _compute_confidence(n)
+
     if metric_name not in BENCHMARKS:
-        return {
-            "status": "unknown",
-            "benchmark_range": "No benchmark available",
-            "interpretation": f"No benchmark defined for '{metric_name}'.",
+        result = {
+            "status": "no_benchmark",
+            "benchmark_range": "None — no benchmark defined for this metric",
+            "interpretation": (
+                f"No benchmark exists for '{metric_name}'. "
+                f"Report the raw value ({value}) only. "
+                "Do not use qualitative labels (good/bad/healthy/poor/strong/weak). "
+                "You may describe direction vs. a prior period but not quality."
+            ),
+            "confidence": confidence,
         }
+        if sample_caveat:
+            result["sample_caveat"] = sample_caveat
+        return result
 
     b = BENCHMARKS[metric_name]
     healthy_min = b["healthy_min"]
@@ -120,11 +168,15 @@ def validate_metric(metric_name: str, value: float) -> dict:
             f"This is excellent performance."
         )
 
-    return {
+    result = {
         "status": status,
         "benchmark_range": f"{healthy_min}–{healthy_max}% (healthy)",
         "interpretation": interpretation,
+        "confidence": confidence,
     }
+    if sample_caveat:
+        result["sample_caveat"] = sample_caveat
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -257,28 +309,6 @@ Avg discount depth:   {avg_disc_pct:.0f}%
 4. If a tool returns no data for a given filter, say so explicitly — do NOT substitute a guess.
 """
     return context
-
-
-def build_insights_context_block(datasets: dict[str, pd.DataFrame]) -> str:
-    """
-    Extended context for the Insights Agent: base context + benchmark reference table.
-    """
-    base = build_context_block(datasets)
-
-    benchmark_table = "\n--- BENCHMARK REFERENCE ---\n"
-    for name, b in BENCHMARKS.items():
-        benchmark_table += (
-            f"  {name}: healthy {b['healthy_min']}–{b['healthy_max']}% "
-            f"| poor <{b.get('poor_max', '?')}% "
-            f"| excellent >{b.get('excellent_min', '?')}%\n"
-        )
-    benchmark_table += (
-        "\nIMPORTANT: Only interpret numbers that were provided to you by the Analytics Agent "
-        "or that appear in the context above. Never invent data. "
-        "Call validate_metric() before making any qualitative claim about performance.\n"
-    )
-
-    return base + benchmark_table
 
 
 # ---------------------------------------------------------------------------

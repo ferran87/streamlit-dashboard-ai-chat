@@ -1,17 +1,9 @@
-"""
-src/agents/tools.py
--------------------
-Anthropic tool schemas for the Analytics Agent.
-Each tool maps to a function in src/metrics.py.
-
-ANALYTICS_TOOLS  — used by the Analytics Agent (8 data-query tools)
-INSIGHTS_TOOLS   — used by the Insights Agent (1 validation tool)
-"""
+"""Anthropic tool schemas for the unified agent. Each tool maps to src/metrics.py."""
 
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Analytics Agent tools
+# Data query tools (8)
 # ---------------------------------------------------------------------------
 
 ANALYTICS_TOOLS: list[dict] = [
@@ -169,18 +161,28 @@ ANALYTICS_TOOLS: list[dict] = [
 
 
 # ---------------------------------------------------------------------------
-# Insights Agent tools
+# Validation tool
 # ---------------------------------------------------------------------------
 
 INSIGHTS_TOOLS: list[dict] = [
     {
         "name": "validate_metric",
         "description": (
-            "Checks whether a given metric value is within the healthy benchmark range "
-            "and returns a structured interpretation: status (healthy/warning/critical), "
-            "benchmark_range (string), and interpretation (string explaining what the value means). "
-            "ALWAYS call this before making any qualitative claim about a metric being 'good' or 'bad'. "
-            "Never invent benchmark ranges — only use what this tool returns."
+            "Checks whether a metric value falls within its benchmark range and returns "
+            "a structured assessment: status (healthy/warning/critical/excellent/no_benchmark), "
+            "benchmark_range, interpretation, confidence (high/moderate/low/very_low), "
+            "and optionally sample_caveat.\n\n"
+            "ALWAYS call this before making any qualitative claim about a metric being "
+            "'good', 'bad', 'healthy', 'concerning', or 'excellent'.\n\n"
+            "Benchmarks exist for these 12 metrics (pass the exact name):\n"
+            "  overall_cvr, landing_menu_ctr, menu_plan_ctr, plan_delivery_ctr,\n"
+            "  delivery_account_ctr, account_payment_ctr, payment_confirmation_ctr,\n"
+            "  mobile_cvr_vs_desktop, first_order_pct, avg_discount_depth,\n"
+            "  classic_plan_pct, veggie_plan_pct.\n\n"
+            "For any other metric (WoW growth, per-discount-code CVR, cross-segment rates, "
+            "meal type adoption %, etc.), still call this tool with a descriptive name — "
+            "it returns status='no_benchmark' with explicit guidance on how to report the "
+            "value without qualitative labels. Never errors on unknown metric names."
         ),
         "input_schema": {
             "type": "object",
@@ -188,30 +190,29 @@ INSIGHTS_TOOLS: list[dict] = [
                 "metric_name": {
                     "type": "string",
                     "description": (
-                        "The name of the metric to validate. Must be one of: "
-                        "overall_cvr, landing_menu_ctr, menu_plan_ctr, plan_delivery_ctr, "
-                        "delivery_account_ctr, account_payment_ctr, payment_confirmation_ctr, "
-                        "mobile_cvr_vs_desktop, first_order_pct, avg_discount_depth, "
-                        "classic_plan_pct, veggie_plan_pct."
+                        "Metric identifier. The 12 names listed above return benchmark ranges. "
+                        "For any other metric (e.g. 'wow_growth_rate', 'discount_SUMMER20_cvr', "
+                        "'referral_mobile_cvr', 'meal_type_veggie_pct'), pass a descriptive name — "
+                        "the tool returns status='no_benchmark' with explicit reporting guidance. "
+                        "Accepts any string — never errors on unknown names."
                     ),
-                    "enum": [
-                        "overall_cvr",
-                        "landing_menu_ctr",
-                        "menu_plan_ctr",
-                        "plan_delivery_ctr",
-                        "delivery_account_ctr",
-                        "account_payment_ctr",
-                        "payment_confirmation_ctr",
-                        "mobile_cvr_vs_desktop",
-                        "first_order_pct",
-                        "avg_discount_depth",
-                        "classic_plan_pct",
-                        "veggie_plan_pct",
-                    ],
+                    # No enum — accepts any string. The 12 known benchmark names are listed
+                    # in the description above so the model knows which ones return health assessments.
                 },
                 "value": {
                     "type": "number",
                     "description": "The actual metric value (e.g. 3.2 for 3.2%).",
+                },
+                "n": {
+                    "type": "integer",
+                    "description": (
+                        "Optional sample size driving this metric value. "
+                        "Read from: sessions_reached (funnel tools), sessions or activations "
+                        "(channel/device tools), used_count (discount tools), "
+                        "activation_count (meal type tools). "
+                        "When provided, returns a confidence tier (high/moderate/low/very_low) "
+                        "and, for small samples, a sample_caveat string to include in your response."
+                    ),
                 },
             },
             "required": ["metric_name", "value"],

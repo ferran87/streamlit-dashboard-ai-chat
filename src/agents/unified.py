@@ -1,64 +1,35 @@
-"""
-src/agents/unified.py
----------------------
-Unified Analytics Agent — replaces the 3-hop Orchestrator → Analytics → Insights chain.
-
-Why unified?
-  The old architecture made 3–4 sequential API calls per user question, causing 8–20s latency.
-  This single agent has all 10 tools (8 analytics + validate_metric + generate_chart) and
-  handles data retrieval, benchmark validation, insight synthesis, and chart generation in
-  one multi-tool exchange. Maximum 2 API calls per turn:
-    1. Synchronous tool-call loop (may involve multiple tool dispatches)
-    2. Streaming final synthesis (no tools — first tokens appear in ~2s)
-
-Anti-hallucination guarantees (preserved from old architecture):
-  - Live KPI context injected as system prompt (from context.py)
-  - Hardcoded benchmark table in system prompt
-  - `validate_metric` tool required before any qualitative claim
-  - `generate_chart` tool uses exact DataFrames — no invented numbers in charts
-
-Usage (from pages/4_AI_Chat.py):
-    result = run_turn(messages, datasets, status_container=st.status(...))
-    for fig in result.charts:
-        st.plotly_chart(fig, use_container_width=True)
-    response_text = st.write_stream(result.stream_gen)
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": response_text,
-        "chart_types": result.chart_type_ids,
-    })
-"""
+"""Unified Analytics Agent — single multi-tool exchange with streaming synthesis."""
 
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Generator
 
 import anthropic
 import pandas as pd
 
 from src.agents.tools import UNIFIED_TOOLS
-from src.agents.context import build_context_block, BENCHMARKS, validate_metric
+from src.agents.context import build_context_block, format_benchmark_table, validate_metric
 from src import metrics as m
 from src import charts
 import plotly.graph_objects as go
 
 MODEL = "claude-sonnet-4-6"
-MAX_TOOL_ITERATIONS = 12  # generous cap — unified agent may call several tools
+MAX_TOOL_ITERATIONS = 12
+
+_client: anthropic.Anthropic | None = None
 
 
-# ---------------------------------------------------------------------------
-# Module-level constants (built once at import — zero per-call overhead)
-# ---------------------------------------------------------------------------
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    return _client
 
-_BENCHMARK_TABLE: str = "\n--- BENCHMARK REFERENCE (do not invent values outside these ranges) ---\n" + "".join(
-    f"  {name}: healthy {b['healthy_min']}–{b['healthy_max']}%"
-    f" | poor <{b.get('poor_max', '?')}%"
-    f" | excellent >{b.get('excellent_min', '?')}%\n"
-    for name, b in BENCHMARKS.items()
-)
+
+_BENCHMARK_TABLE: str = format_benchmark_table()
 
 _ROLE_PROMPT: str = """
 === YOUR ROLE: ANALYTICS ASSISTANT ===
@@ -82,6 +53,41 @@ RULES:
 4. Always call validate_metric before any qualitative assessment of a metric.
 5. Keep final answers concise (3–4 paragraphs) and actionable.
 6. If a tool returns an error or "unavailable", say so — never substitute a guess.
+
+CONFIDENCE PROTOCOL — MANDATORY:
+Determine the confidence tier for every quantitative claim from three factors:
+
+FACTOR 1 — BENCHMARK: validate_metric returned healthy/warning/critical/excellent → benchmark exists.
+  Returned no_benchmark → no benchmark exists for this metric.
+FACTOR 2 — SAMPLE SIZE: Read from sessions_reached (funnel), sessions/activations (channel/device),
+  used_count (discount), activation_count (meal type) already present in tool results.
+  n < 30 → very_low | n 30–99 → low | n 100–499 → moderate | n ≥ 500 → high
+  Top-level aggregates from get_kpi_summary or the LIVE CONTEXT block → treat as high.
+FACTOR 3 — METRIC TYPE: Direct top-level aggregate → high. Derived (WoW growth, cross-segment,
+  per-discount-code, per-meal-type %) → confidence is determined by Factor 2 sample size.
+
+LANGUAGE BY CONFIDENCE TIER:
+  HIGH (benchmark exists AND n ≥ 500 or top-level aggregate):
+    Use definitive language: "The data shows...", "Our CVR is X%, within the healthy range of..."
+  MEDIUM (benchmark exists but n 100–499, OR no_benchmark but n ≥ 500):
+    Use hedging language: "The data suggests...", "This indicates...", "Appears to..."
+  LOW (n 30–99, regardless of benchmark):
+    Must state the sample size explicitly: "Based on only N sessions, this metric appears
+    to... — treat as indicative only."
+  VERY LOW (n < 30):
+    Report raw number only. Explicitly decline to interpret:
+    "Only N observations — too small for reliable conclusions."
+
+WHEN validate_metric RETURNS status="no_benchmark":
+  - State the raw number exactly as returned by the tool.
+  - Say explicitly: "No benchmark exists for this metric."
+  - DO NOT use these words without a validated healthy/warning/critical/excellent status:
+    excellent, strong, healthy, poor, concerning, encouraging, worrying, impressive, disappointing,
+    good performance, bad performance.
+  - You MAY describe direction ("up 3 percentage points from last week") but NOT quality.
+  - Example: "Week-on-week activation growth is +8.3%. No benchmark exists for this metric,
+    so I cannot characterise whether this rate is high or low for HelloFresh."
+  - If validate_metric also returns a sample_caveat: include that caveat verbatim.
 """
 
 
@@ -92,10 +98,9 @@ RULES:
 @dataclass
 class TurnOutput:
     """Return value of run_turn(). Caller streams text and renders charts."""
-    stream_gen: Generator           # pass directly to st.write_stream()
-    charts: list                    # list[go.Figure] — render before text
-    chart_type_ids: list            # list[str] — persist in session state for history
-    updated_messages: list          # original messages list, unchanged; caller appends assistant turn
+    stream_gen: Generator
+    charts: list
+    chart_type_ids: list
 
 
 # ---------------------------------------------------------------------------
@@ -108,24 +113,8 @@ def run_turn(
     max_history: int = 20,
     status_container=None,
 ) -> TurnOutput:
-    """
-    Runs one full agentic turn.
-
-    Phase 1 (synchronous): Tool-call loop. Agent calls data tools, validate_metric,
-        and/or generate_chart. Accumulates charts as go.Figure objects.
-    Phase 2 (streaming): Issues a streaming API call (no tools) to synthesise the
-        final response. Returns a generator — caller passes it to st.write_stream().
-
-    Args:
-        messages:         Full conversation history from st.session_state.messages.
-        datasets:         DataFrames dict from data/loader.load_all().
-        max_history:      Maximum number of past messages passed to the API (prevents bloat).
-        status_container: Optional st.status() context for showing tool call trace.
-
-    Returns:
-        TurnOutput dataclass with stream_gen, charts, chart_type_ids, updated_messages.
-    """
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+    """Run one agentic turn: tool-call loop then streaming synthesis."""
+    client = _get_client()
 
     # Build system prompt (context block is cached — cheap after first call)
     system_prompt = build_context_block(datasets) + _BENCHMARK_TABLE + _ROLE_PROMPT
@@ -157,7 +146,6 @@ def run_turn(
                 stream_gen=_fake_stream(direct_text),
                 charts=collected_charts,
                 chart_type_ids=chart_type_ids,
-                updated_messages=list(messages),
             )
 
         if response.stop_reason == "tool_use":
@@ -189,9 +177,11 @@ def run_turn(
                         })
 
                 elif block.name == "validate_metric":
+                    n_raw = block.input.get("n")
                     result = validate_metric(
                         metric_name=block.input.get("metric_name", ""),
                         value=float(block.input.get("value", 0)),
+                        n=int(n_raw) if n_raw is not None else None,
                     )
                     result_json = json.dumps(result)
 
@@ -222,7 +212,6 @@ def run_turn(
         stream_gen=stream_gen,
         charts=collected_charts,
         chart_type_ids=chart_type_ids,
-        updated_messages=list(messages),  # unchanged; caller appends assistant turn
     )
 
 
@@ -304,7 +293,7 @@ def _dispatch_chart_tool(
 
 
 # ---------------------------------------------------------------------------
-# Analytics tool dispatcher (mirrors analytics.py — kept in sync)
+# Analytics tool dispatcher
 # ---------------------------------------------------------------------------
 
 def _dispatch_analytics_tool(
