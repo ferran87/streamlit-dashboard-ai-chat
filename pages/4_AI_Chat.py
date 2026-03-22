@@ -2,9 +2,13 @@
 
 import json
 import re
+from datetime import datetime
+from pathlib import Path
 import streamlit as st
 from data.loader import load_all
 from src.agents.unified import run_turn, dispatch_chart_tool
+
+_FEATURE_REQUESTS_DIR = Path("docs/feature_requests")
 
 _MAX_HISTORY = 20
 
@@ -65,6 +69,16 @@ def _build_feature_context(user_question: str, ai_response: str) -> str:
     )
 
 
+def _save_feature_request(content: str) -> Path:
+    """Save generated PRD to docs/feature_requests/ with a timestamped filename."""
+    _FEATURE_REQUESTS_DIR.mkdir(parents=True, exist_ok=True)
+    slug = re.sub(r"[^a-z0-9]+", "_", content[:60].lower()).strip("_")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = _FEATURE_REQUESTS_DIR / f"{ts}_{slug}.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
 @st.dialog("Request a Feature", width="large")
 def _feature_request_dialog():
     context = st.session_state.get("feature_request_context", "")
@@ -82,12 +96,14 @@ def _feature_request_dialog():
             from src.agents.feature_request import generate_feature_request
             with st.spinner("Generating PRD and code suggestion..."):
                 output = generate_feature_request(description.strip())
+            saved_path = _save_feature_request(output)
             st.divider()
+            st.success(f"Saved to `{saved_path}`")
             st.markdown(output)
             st.download_button(
                 label="Download as Markdown",
                 data=output,
-                file_name="feature_request.md",
+                file_name=saved_path.name,
                 mime="text/markdown",
             )
         else:
