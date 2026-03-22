@@ -128,18 +128,51 @@ def validate_metric(metric_name: str, value: float) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Context block builder
+# Context block builder — with module-level cache
 # ---------------------------------------------------------------------------
+
+# Module-level cache: avoids recomputing expensive DataFrame aggregations on
+# every API call. Invalidates automatically when dataset contents change.
+_CONTEXT_CACHE: dict = {}
+
+
+def _dataset_fingerprint(datasets: dict[str, pd.DataFrame]) -> tuple:
+    """
+    Fast fingerprint of the datasets dict.
+    Uses (name, shape, first_cell, last_cell) per frame — cheap to compute,
+    sufficient to detect data changes between Streamlit cache reloads.
+    """
+    parts = []
+    for name in sorted(datasets.keys()):
+        df = datasets[name]
+        first = df.iat[0, 0] if len(df) > 0 and len(df.columns) > 0 else None
+        last  = df.iat[-1, -1] if len(df) > 0 and len(df.columns) > 0 else None
+        parts.append((name, df.shape, str(first), str(last)))
+    return tuple(parts)
+
 
 def build_context_block(datasets: dict[str, pd.DataFrame]) -> str:
     """
     Computes live KPIs from the DataFrames and returns a formatted string
     to be used as the 'system' prompt in every agent API call.
 
+    Results are cached per dataset version (keyed on shape + boundary values)
+    so the expensive aggregations only run once per loaded dataset.
+
     Gracefully falls back to placeholder values if metrics haven't been
     implemented yet (so the agent architecture works even before src/metrics.py
     is fully implemented).
     """
+    fp = _dataset_fingerprint(datasets)
+    if fp in _CONTEXT_CACHE:
+        return _CONTEXT_CACHE[fp]
+    result = _build_context_block_impl(datasets)
+    _CONTEXT_CACHE[fp] = result
+    return result
+
+
+def _build_context_block_impl(datasets: dict[str, pd.DataFrame]) -> str:
+    """Internal implementation — called only on cache miss."""
     df_sessions    = datasets.get("sessions", pd.DataFrame())
     df_activations = datasets.get("activations", pd.DataFrame())
     df_funnel      = datasets.get("funnel_steps", pd.DataFrame())

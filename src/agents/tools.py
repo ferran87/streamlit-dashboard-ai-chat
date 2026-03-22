@@ -218,3 +218,75 @@ INSIGHTS_TOOLS: list[dict] = [
         },
     },
 ]
+
+
+# ---------------------------------------------------------------------------
+# generate_chart tool (used by the Unified Agent)
+# ---------------------------------------------------------------------------
+
+GENERATE_CHART_TOOL: dict = {
+    "name": "generate_chart",
+    "description": (
+        "Generates a Plotly chart and displays it inline in the chat, above your text response. "
+        "Call this when a visual would communicate comparisons, trends, or rankings more clearly "
+        "than numbers in text. Call at most ONCE per turn. "
+        "Available chart types:\n"
+        "- funnel_steps_bar: sessions reached per funnel step (coloured by CTR health)\n"
+        "- funnel_drop_off_waterfall: sessions lost at each step\n"
+        "- activation_trend_line: activations count + avg value over time\n"
+        "- activation_type_pie: split by first_order / reactivation / referral / gift\n"
+        "- cvr_by_channel_bar: sessions, activations, and CVR% by acquisition channel\n"
+        "- cvr_by_device_bar: CVR% by device (mobile / desktop / tablet)\n"
+        "- activation_value_by_plan: total revenue and avg basket by plan\n"
+        "- meal_type_adoption_bar: % of activations that included each meal type\n"
+        "- discount_effectiveness: table of discount codes with uplift vs no-discount baseline\n"
+        "- session_volume_trend: weekly activated vs non-activated session stacked area"
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "chart_type": {
+                "type": "string",
+                "description": "The type of chart to generate.",
+                "enum": [
+                    "funnel_steps_bar",
+                    "funnel_drop_off_waterfall",
+                    "activation_trend_line",
+                    "activation_type_pie",
+                    "cvr_by_channel_bar",
+                    "cvr_by_device_bar",
+                    "activation_value_by_plan",
+                    "meal_type_adoption_bar",
+                    "discount_effectiveness",
+                    "session_volume_trend",
+                ],
+            },
+            "channel": {
+                "type": "string",
+                "description": "Filter funnel_steps_bar by acquisition channel (optional).",
+                "enum": [
+                    "organic_search", "paid_search", "paid_social",
+                    "email", "referral", "direct",
+                ],
+            },
+            "device": {
+                "type": "string",
+                "description": "Filter funnel_steps_bar by device (optional).",
+                "enum": ["mobile", "desktop", "tablet"],
+            },
+            "granularity": {
+                "type": "string",
+                "description": "Time grouping for activation_trend_line: 'week' or 'month'.",
+                "enum": ["week", "month"],
+            },
+        },
+        "required": ["chart_type"],
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Unified tools list — all tools available to the single Unified Agent
+# ---------------------------------------------------------------------------
+
+UNIFIED_TOOLS: list[dict] = ANALYTICS_TOOLS + INSIGHTS_TOOLS + [GENERATE_CHART_TOOL]
