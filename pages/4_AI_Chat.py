@@ -17,6 +17,10 @@ dfs = load_all()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "show_feature_request" not in st.session_state:
+    st.session_state.show_feature_request = False
+if "feature_request_output" not in st.session_state:
+    st.session_state.feature_request_output = None
 
 # Starter question buttons
 if not st.session_state.messages:
@@ -34,6 +38,49 @@ if not st.session_state.messages:
         if cols[i % 3].button(q, key=f"starter_{i}"):
             st.session_state.messages.append({"role": "user", "content": q})
             st.rerun()
+
+# Feature request form (shown when user clicks the sidebar button)
+if st.session_state.show_feature_request:
+    with st.container(border=True):
+        st.markdown("### 💡 Request a Feature")
+        st.caption(
+            "Describe what you were trying to find out. The AI will generate "
+            "a product spec and code suggestion for the development team."
+        )
+        description = st.text_area(
+            "What feature would you like?",
+            placeholder=(
+                "e.g. I wanted to see how CVR changed week over week as a line chart, "
+                "but the chat couldn't show me a time-series breakdown."
+            ),
+            height=120,
+            key="feature_request_input",
+        )
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            submitted = st.button("Generate", type="primary")
+        with col2:
+            if st.button("Cancel"):
+                st.session_state.show_feature_request = False
+                st.session_state.feature_request_output = None
+                st.rerun()
+
+        if submitted and description.strip():
+            from src.agents.feature_request import generate_feature_request
+            with st.spinner("Generating PRD and code suggestion…"):
+                st.session_state.feature_request_output = generate_feature_request(
+                    description.strip()
+                )
+
+        if st.session_state.feature_request_output:
+            st.divider()
+            st.markdown(st.session_state.feature_request_output)
+            st.download_button(
+                label="⬇️ Download as Markdown",
+                data=st.session_state.feature_request_output,
+                file_name="feature_request.md",
+                mime="text/markdown",
+            )
 
 # Render message history — chart figures are stored as JSON to avoid recomputation
 for msg in st.session_state.messages:
@@ -96,6 +143,14 @@ with st.sidebar:
 
     total = len(st.session_state.messages)
     st.caption(f"{total} messages total · last {_MAX_HISTORY} sent to AI")
+
+    st.divider()
+    st.subheader("💡 Feature Request")
+    st.caption("Describe a question the chat couldn't answer.")
+    if st.button("Request a Feature", use_container_width=True):
+        st.session_state.show_feature_request = True
+        st.session_state.feature_request_output = None
+        st.rerun()
 
     st.divider()
     st.markdown("**How it works**")
