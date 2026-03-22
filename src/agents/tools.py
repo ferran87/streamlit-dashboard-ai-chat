@@ -182,6 +182,21 @@ ANALYTICS_TOOLS: list[dict] = [
             "required": [],
         },
     },
+    {
+        "name": "get_session_volume_trend",
+        "description": (
+            "Returns weekly session volume with conversion data: total sessions, "
+            "activated sessions, and CVR (%) per week. "
+            "Use for questions about weekly conversion rate trends, session volume over time, "
+            "week-over-week CVR changes, or any time-series question that needs a per-week "
+            "session denominator."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {**_DATE_PROPS},
+            "required": [],
+        },
+    },
 ]
 
 

@@ -452,6 +452,10 @@ def _dispatch_analytics_tool(
             )
             result = df.to_dict(orient="records")
 
+        elif tool_name == "get_session_volume_trend":
+            df = m.get_session_volume_trend(df_sessions)
+            result = df.to_dict(orient="records")
+
         else:
             result = {"error": f"Unknown tool: {tool_name}"}
 

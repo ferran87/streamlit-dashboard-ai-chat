@@ -34,9 +34,10 @@ get_overall_conversion_rate(df_sessions) → float
 get_funnel_drop_off(df_sessions, df_funnel) → DataFrame [step, dropped_sessions, drop_pct]
 
 --- EXISTING AI TOOLS (src/agents/tools.py) ---
-ANALYTICS_TOOLS (8 tools, all support date_range_start/date_range_end):
+ANALYTICS_TOOLS (9 tools, all support date_range_start/date_range_end):
   get_kpi_summary, get_funnel_ctr, get_conversion_by_channel, get_conversion_by_device,
-  get_activation_value_breakdown, get_discount_analysis, get_meal_type_performance, get_activation_trend
+  get_activation_value_breakdown, get_discount_analysis, get_meal_type_performance,
+  get_activation_trend, get_session_volume_trend
 
 INSIGHTS_TOOLS (1 tool):
   validate_metric(metric_name, value, n=None) → benchmark status + confidence tier
