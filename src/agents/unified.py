@@ -88,6 +88,38 @@ WHEN validate_metric RETURNS status="no_benchmark":
   - Example: "Week-on-week activation growth is +8.3%. No benchmark exists for this metric,
     so I cannot characterise whether this rate is high or low for HelloFresh."
   - If validate_metric also returns a sample_caveat: include that caveat verbatim.
+
+DATE FILTERING — USE WHEN USER SPECIFIES A TIME PERIOD:
+When the user mentions a time period, ALWAYS filter tool calls to that window.
+
+1. READ THE DATA WINDOW from: "Data window: YYYY-MM-DD → YYYY-MM-DD" in the LIVE CONTEXT.
+   The right-hand date is the data maximum (treat as "today" for relative calculations).
+
+2. COMPUTE ISO DATES (YYYY-MM-DD format):
+   - "last 3 months" / "last 90 days"   → start = data_max − 90 days
+   - "last month" / "last 30 days"      → start = data_max − 30 days
+   - "last 6 months"                    → start = data_max − 182 days
+   - "last week" / "last 7 days"        → start = data_max − 6 days
+   - "last 2 weeks" / "last 14 days"    → start = data_max − 13 days
+   - "last quarter"                     → first/last day of the previous calendar quarter
+   - "this quarter" / "current quarter" → first day of current calendar quarter → data_max
+   - "Q4 2025"                          → 2025-10-01 → 2025-12-31
+   - "Q1 2026"                          → 2026-01-01 → 2026-03-31
+   - "since January" / "since Jan"      → first day of Jan of data_max's year → data_max
+   - "YTD" / "year to date"             → data_max's year-01-01 → data_max
+   - "in March 2026"                    → 2026-03-01 → 2026-03-31
+   - "all time" / no period mentioned   → omit both date params (no filter applied)
+
+3. PASS THE SAME date_range_start AND date_range_end TO EVERY TOOL CALL IN THE TURN.
+   All metrics must use identical date bounds for consistency.
+
+4. CONFIRM TO THE USER which period was applied:
+   "Filtering to the last 3 months (2025-12-22 → 2026-03-22)."
+
+5. If the period falls entirely outside the data window, warn the user:
+   "The requested period is outside the available data window (data_min → data_max)."
+
+6. The date filter applies to this turn only — it does NOT persist to future turns.
 """
 
 
@@ -248,10 +280,91 @@ def dispatch_chart_tool(tool_input: dict, datasets: dict[str, pd.DataFrame]) -> 
     builder = _CHART_REGISTRY.get(chart_type)
     if builder is None:
         return None
+    # Apply date pre-filter before routing to the builder
+    ds = _apply_date_filter(
+        datasets,
+        date_start=tool_input.get("date_range_start"),
+        date_end=tool_input.get("date_range_end"),
+    )
     try:
-        return builder(datasets, **tool_input)
+        return builder(ds, **tool_input)   # ds is the date-filtered copy
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Date filter helper
+# ---------------------------------------------------------------------------
+
+def _apply_date_filter(
+    datasets: dict[str, pd.DataFrame],
+    date_start: str | None,
+    date_end: str | None,
+) -> dict[str, pd.DataFrame]:
+    """
+    Returns a filtered copy of datasets scoped to the given date window.
+
+    Filters df_sessions by session_date, then cascades to funnel_steps,
+    activations, and meal_selections via foreign key joins (session_id → activation_id).
+    Returns original datasets unchanged (zero-copy fast path) if both dates are None.
+
+    Edge cases:
+      - Missing session_date column → returns original datasets unchanged.
+      - date_start only or date_end only → single-sided bound applied.
+      - Empty result after filter → returns empty DataFrames (callers handle empties).
+    """
+    if date_start is None and date_end is None:
+        return datasets
+
+    df_sessions = datasets.get("sessions", pd.DataFrame())
+    if "session_date" not in df_sessions.columns or df_sessions.empty:
+        return datasets
+
+    mask = pd.Series([True] * len(df_sessions), index=df_sessions.index)
+    if date_start is not None:
+        mask &= pd.to_datetime(df_sessions["session_date"]) >= pd.to_datetime(date_start)
+    if date_end is not None:
+        mask &= pd.to_datetime(df_sessions["session_date"]) <= pd.to_datetime(date_end)
+
+    filtered_sessions = df_sessions[mask]
+    valid_session_ids = set(filtered_sessions["session_id"]) if "session_id" in filtered_sessions.columns else set()
+
+    # Cascade → funnel_steps
+    df_funnel = datasets.get("funnel_steps", pd.DataFrame())
+    filtered_funnel = (
+        df_funnel[df_funnel["session_id"].isin(valid_session_ids)]
+        if not df_funnel.empty and "session_id" in df_funnel.columns
+        else df_funnel
+    )
+
+    # Cascade → activations (linked via session_id)
+    df_activations = datasets.get("activations", pd.DataFrame())
+    filtered_activations = (
+        df_activations[df_activations["session_id"].isin(valid_session_ids)]
+        if not df_activations.empty and "session_id" in df_activations.columns
+        else df_activations
+    )
+
+    # Cascade → meal_selections (linked via activation_id)
+    valid_activation_ids = (
+        set(filtered_activations["activation_id"])
+        if not filtered_activations.empty and "activation_id" in filtered_activations.columns
+        else set()
+    )
+    df_meals = datasets.get("meal_selections", pd.DataFrame())
+    filtered_meals = (
+        df_meals[df_meals["activation_id"].isin(valid_activation_ids)]
+        if not df_meals.empty and "activation_id" in df_meals.columns
+        else df_meals
+    )
+
+    return {
+        "sessions":        filtered_sessions,
+        "funnel_steps":    filtered_funnel,
+        "activations":     filtered_activations,
+        "meal_selections": filtered_meals,
+        "discounts":       datasets.get("discounts", pd.DataFrame()),  # catalogue — date-invariant
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +377,12 @@ def _dispatch_analytics_tool(
     datasets: dict[str, pd.DataFrame],
 ) -> str:
     """Routes analytics tool calls to metrics functions. Returns JSON string."""
+    # Date pre-filter — rebind datasets to filtered version; all df_* picks it up
+    datasets = _apply_date_filter(
+        datasets,
+        date_start=tool_input.get("date_range_start"),
+        date_end=tool_input.get("date_range_end"),
+    )
     df_sessions    = datasets.get("sessions",        pd.DataFrame())
     df_funnel      = datasets.get("funnel_steps",    pd.DataFrame())
     df_activations = datasets.get("activations",     pd.DataFrame())

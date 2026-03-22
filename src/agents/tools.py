@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+# Shared date-range properties added to every analytics tool and the chart tool.
+# The agent reads the data window from the LIVE CONTEXT block and computes ISO dates.
+_DATE_PROPS: dict = {
+    "date_range_start": {
+        "type": "string",
+        "description": (
+            "ISO date string (YYYY-MM-DD). Filter data to sessions/activations on or "
+            "after this date. Compute from the LIVE DATA CONTEXT 'Data window' line. "
+            "Pass the same value to every tool call in this turn."
+        ),
+    },
+    "date_range_end": {
+        "type": "string",
+        "description": (
+            "ISO date string (YYYY-MM-DD). Filter data to sessions/activations on or "
+            "before this date. Compute from the LIVE DATA CONTEXT 'Data window' line. "
+            "Pass the same value to every tool call in this turn."
+        ),
+    },
+}
+
 # ---------------------------------------------------------------------------
 # Data query tools (8)
 # ---------------------------------------------------------------------------
@@ -19,7 +40,7 @@ ANALYTICS_TOOLS: list[dict] = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {**_DATE_PROPS},
             "required": [],
         },
     },
@@ -47,6 +68,7 @@ ANALYTICS_TOOLS: list[dict] = [
                     "description": "Filter by device type. Omit for all devices.",
                     "enum": ["mobile", "desktop", "tablet"],
                 },
+                **_DATE_PROPS,
             },
             "required": [],
         },
@@ -60,7 +82,7 @@ ANALYTICS_TOOLS: list[dict] = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {**_DATE_PROPS},
             "required": [],
         },
     },
@@ -74,7 +96,7 @@ ANALYTICS_TOOLS: list[dict] = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {**_DATE_PROPS},
             "required": [],
         },
     },
@@ -95,6 +117,7 @@ ANALYTICS_TOOLS: list[dict] = [
                     "enum": ["plan", "activation_type", "both"],
                     "default": "both",
                 },
+                **_DATE_PROPS,
             },
             "required": [],
         },
@@ -110,7 +133,7 @@ ANALYTICS_TOOLS: list[dict] = [
         ),
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {**_DATE_PROPS},
             "required": [],
         },
     },
@@ -132,6 +155,7 @@ ANALYTICS_TOOLS: list[dict] = [
                     "enum": ["classic", "veggie", "family", "protein",
                              "low_calorie", "quick_easy"],
                 },
+                **_DATE_PROPS,
             },
             "required": [],
         },
@@ -153,6 +177,7 @@ ANALYTICS_TOOLS: list[dict] = [
                     "enum": ["week", "month"],
                     "default": "week",
                 },
+                **_DATE_PROPS,
             },
             "required": [],
         },
@@ -280,6 +305,7 @@ GENERATE_CHART_TOOL: dict = {
                 "description": "Time grouping for activation_trend_line: 'week' or 'month'.",
                 "enum": ["week", "month"],
             },
+            **_DATE_PROPS,
         },
         "required": ["chart_type"],
     },
